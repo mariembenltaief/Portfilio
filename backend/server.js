@@ -20,29 +20,37 @@ const parametresRoutes = require('./routes/parametres');
 const statistiquesRoutes = require('./routes/statistiques');
 const aproposRoutes = require('./routes/aproposRoutes');
 
-// IMPORTANT: Importer initModels
 const { initModels } = require('./controllers/aproposController');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// ─── CORS ─────────────────────────────────────────────────────
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// ─── Middleware ───────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/api/visiteurs', visiteursRoutes);
-app.use('/api/cours', coursRoutes);
-app.use('/api/ressources-cours', ressourcesCoursRoutes);
-app.use('/api/projets-recherche', projetsRechercheRoutes);
-app.use('/api/publications', publicationsRoutes);
-app.use('/api/articles-blog', articlesBlogRoutes);
-app.use('/api/liens-externes', liensExternesRoutes);
-app.use('/api/parametres', parametresRoutes);
-app.use('/api/statistiques', statistiquesRoutes);
-app.use('/api/apropos', aproposRoutes);
 
-// Error handling middleware
+// ─── Routes ───────────────────────────────────────────────────
+app.use('/api/visiteurs',        visiteursRoutes);
+app.use('/api/cours',            coursRoutes);
+app.use('/api/ressources-cours', ressourcesCoursRoutes);
+app.use('/api/projets-recherche',projetsRechercheRoutes);
+app.use('/api/publications',     publicationsRoutes);
+app.use('/api/articles-blog',    articlesBlogRoutes);
+app.use('/api/liens-externes',   liensExternesRoutes);
+app.use('/api/parametres',       parametresRoutes);
+app.use('/api/statistiques',     statistiquesRoutes);
+app.use('/api/apropos',          aproposRoutes);
+
+// ─── Error handling ───────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.status || 500).json({
@@ -51,15 +59,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Connect to database and start server
+// ─── Start ────────────────────────────────────────────────────
 connectDB().then(() => {
-  
   initModels(pool);
-
-  
   app.listen(PORT, () => {
     console.log(`✅ Serveur démarré sur le port ${PORT}`);
-   
   });
 }).catch(err => {
   console.error('Erreur de connexion à la DB:', err);

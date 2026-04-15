@@ -1,7 +1,6 @@
 // ============================================================
 // CourseDetailPage.jsx — With PDF Preview Modal
-// NEW: Preview modal (iframe) + Download button per resource
-// All existing fetch/render logic preserved unchanged.
+// FIX: handleDownload uses <a download> instead of window.open()
 // ============================================================
 
 import { useState, useEffect, useCallback } from "react";
@@ -117,13 +116,7 @@ function parseList(raw) {
   if (numbered.length > 1) return numbered;
   return [s];
 }
-function buildFileUrl(storedPath) {
-  const p = storedPath.replace(/\\/g, "/");
-  if (p.startsWith("http")) return p;                    // déjà URL
-  const i = p.indexOf("uploads/");
-  if (i !== -1) return `${API_BASE}/${p.slice(i)}`;     // ← legacy absolu
-  return `${API_BASE}/${p}`;                             // ← relatif propre
-}
+
 function extractCourse(json) {
   if (!json || typeof json !== "object") return null;
   if (json.course && typeof json.course === "object") return json.course;
@@ -145,9 +138,9 @@ function extractResources(json) {
 // PREVIEW MODAL
 // ═══════════════════════════════════════════════════════════════
 function PreviewModal({ previewUrl, filename, onClose }) {
-  const canPreview = previewUrl && isPDF(filename ?? "");
+  const ext = (filename ?? "").split(".").pop().toLowerCase();
+  const canPreview = previewUrl && ["pdf","jpg","jpeg","png","gif","mp4","webm"].includes(ext);
 
-  // ESC key + lock body scroll
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -159,7 +152,6 @@ function PreviewModal({ previewUrl, filename, onClose }) {
   }, [onClose]);
 
   return (
-    // Overlay — click outside closes modal
     <div
       onClick={onClose}
       style={{
@@ -169,8 +161,6 @@ function PreviewModal({ previewUrl, filename, onClose }) {
         padding:"24px 16px",
         animation:"modalFade .2s ease both",
       }}>
-
-      {/* Modal box */}
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -183,8 +173,6 @@ function PreviewModal({ previewUrl, filename, onClose }) {
           boxShadow:"0 32px 80px rgba(0,0,0,.65)",
           animation:"modalSlide .25s ease both",
         }}>
-
-        {/* Header bar */}
         <div style={{
           display:"flex", alignItems:"center", gap:12,
           padding:"13px 18px",
@@ -211,17 +199,16 @@ function PreviewModal({ previewUrl, filename, onClose }) {
             {Ico.close}
           </button>
         </div>
-
-        {/* Content area */}
         <div style={{ flex:1, overflow:"hidden", background:"#0f172a", position:"relative" }}>
           {canPreview ? (
-            <iframe
-              src={previewUrl}
-              title="PDF Preview"
-              style={{ width:"100%", height:"100%", border:"none", display:"block" }}
-            />
+            ["jpg","jpeg","png","gif"].includes(ext) ? (
+              <img src={previewUrl} alt={filename} style={{ maxWidth:"100%", maxHeight:"100%", objectFit:"contain", display:"block", margin:"auto" }} />
+            ) : ext === "mp4" || ext === "webm" ? (
+              <video src={previewUrl} controls style={{ width:"100%", height:"100%", display:"block" }} />
+            ) : (
+              <iframe src={previewUrl} title="Preview" style={{ width:"100%", height:"100%", border:"none", display:"block" }} />
+            )
           ) : (
-            // Non-PDF fallback message
             <div style={{
               height:"100%", display:"flex", flexDirection:"column",
               alignItems:"center", justifyContent:"center",
@@ -294,10 +281,10 @@ function SectionBlock({ icon, title, t, dark, delay=0, children }) {
 }
 
 function CourseHeader({ cours, dark, lang, t, onBack }) {
-  const titre = cours?.intitule ?? cours?.titre ?? cours?.title ?? "—";
-  const type  = cours?.type ?? "";
+  const titre  = cours?.intitule ?? cours?.titre ?? cours?.title ?? "—";
+  const type   = cours?.type ?? "";
   const niveau = cours?.niveau ?? "";
-  const tc    = TYPE_STYLE[type] ?? { bg:"#64748b", text:"#fff" };
+  const tc     = TYPE_STYLE[type] ?? { bg:"#64748b", text:"#fff" };
   return (
     <div style={{ background:t.bgHero, borderBottom:`1px solid ${t.border}`, padding:"60px 2rem 44px" }}>
       <div style={{ maxWidth:1000, margin:"0 auto" }}>
@@ -305,7 +292,7 @@ function CourseHeader({ cours, dark, lang, t, onBack }) {
           {Ico.arrowL} {lang==="fr" ? "Retour aux cours" : "Back to courses"}
         </button>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:18 }}>
-          {type && <span style={{ background:tc.bg, color:tc.text, fontSize:12, fontWeight:800, borderRadius:8, padding:"5px 14px", letterSpacing:"0.06em" }}>{type}</span>}
+          {type   && <span style={{ background:tc.bg, color:tc.text, fontSize:12, fontWeight:800, borderRadius:8, padding:"5px 14px", letterSpacing:"0.06em" }}>{type}</span>}
           {niveau && <span style={{ background:t.accentDim, color:dark?"#93c5fd":"#1d4ed8", border:`1px solid ${t.accentBdr}`, fontSize:12.5, fontWeight:700, borderRadius:8, padding:"5px 14px" }}>{lvlIcon(niveau)} {niveau}</span>}
         </div>
         <h1 style={{ margin:0, lineHeight:1.2, fontSize:"clamp(1.8rem,3.5vw,2.8rem)", fontWeight:900, color:t.text, letterSpacing:-1, fontFamily:"'Playfair Display',Georgia,serif", animation:"fadeUp .45s ease both" }}>{titre}</h1>
@@ -319,9 +306,9 @@ function CourseInfo({ cours, dark, lang, t }) {
   const annee = cours?.annee_universitaire ?? cours?.annee ?? null;
   const inst  = cours?.institution ?? null;
   const chips = [
-    duree && { icon:Ico.clock, label:lang==="fr"?"Durée":"Duration",     value:`${duree}h` },
-    annee && { icon:Ico.cap,   label:lang==="fr"?"Année":"Year",          value:`${annee}` },
-    inst  && { icon:Ico.globe, label:lang==="fr"?"Institution":"Campus",  value:inst },
+    duree && { icon:Ico.clock, label:lang==="fr"?"Durée":"Duration",    value:`${duree}h` },
+    annee && { icon:Ico.cap,   label:lang==="fr"?"Année":"Year",         value:`${annee}` },
+    inst  && { icon:Ico.globe, label:lang==="fr"?"Institution":"Campus", value:inst },
   ].filter(Boolean);
   if (!chips.length) return null;
   return (
@@ -399,25 +386,50 @@ function CourseContent({ cours, dark, lang, t }) {
 function ResourceCard({ ressource, dark, lang, t, onPreview }) {
   const [hov,         setHov]         = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [localCount,  setLocalCount]  = useState(ressource?.nb_telechargements ?? 0);
 
-  const titre    = ressource?.titre ?? (lang === "fr" ? "Sans titre" : "Untitled");
-  const fichier  = ressource?.fichier ?? "";
-  const count    = ressource?.nb_telechargements ?? null;
-  const showCount = ressource?.afficher_compteur === true && count !== null;
-  const icon     = fileIcon(fichier);
-  const resId    = ressource?.id ?? ressource?._id ?? null;
-  const dlUrl    = resId ? `${API}/ressources-cours/${resId}/download` : null;
+  const titre     = ressource?.titre ?? (lang === "fr" ? "Sans titre" : "Untitled");
+  const fichier   = ressource?.fichier ?? "";
+  const count     = localCount;
+  const showCount = ressource?.afficher_compteur === true;
+  const icon      = fileIcon(fichier);
+  const resId     = ressource?.id ?? ressource?._id ?? null;
+  const dlUrl     = resId ? `${API}/ressources-cours/${resId}/download` : null;
 
-  // Preview URL: served statically by Express (app.use('/uploads', express.static(...)))
+  // Preview URL — served statically by Express
   const previewUrl = fichier
     ? `http://localhost:5000/${fichier.replace(/\\/g, "/")}`
     : null;
 
-  const handleDownload = () => {
+  // ── ✅ FIXED: use fetch + blob + <a download> ──────────────
+  // window.open() always opens in a new tab regardless of headers.
+  // The only reliable way to force a download is via a blob URL.
+  const handleDownload = async () => {
     if (!dlUrl || downloading) return;
     setDownloading(true);
-    window.open(dlUrl, "_blank", "noopener,noreferrer");
-    setTimeout(() => setDownloading(false), 1500);
+    try {
+      const response = await fetch(dlUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      // Use titre as filename, fallback to fichier basename
+      const basename = fichier.split("/").pop() || titre;
+      a.download = titre.includes(".") ? titre : basename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Free memory after a short delay
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+      // ✅ Mettre à jour le compteur localement
+      setLocalCount(prev => prev + 1);
+    } catch (err) {
+      console.error("Download error:", err);
+      alert(lang === "fr" ? "Erreur lors du téléchargement." : "Download failed.");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const btnBase = {
@@ -462,8 +474,8 @@ function ResourceCard({ ressource, dark, lang, t, onPreview }) {
         {/* 👁 Preview */}
         <button
           className="cd-pre-btn"
-          onClick={() => onPreview({ url:previewUrl, filename:fichier, titre })}
-          disabled={!previewUrl}
+          onClick={() => onPreview({ url: previewUrl, filename: fichier, titre })}
+          disabled={!previewUrl || ["docx","doc","ppt","pptx","zip","rar"].includes((fichier.split(".").pop()||"").toLowerCase())}
           style={{
             ...btnBase,
             background: t.cyanDim,
@@ -476,7 +488,7 @@ function ResourceCard({ ressource, dark, lang, t, onPreview }) {
           {lang==="fr" ? "Aperçu" : "Preview"}
         </button>
 
-        {/* ⬇ Download */}
+        {/* ⬇ Download — fetch blob → force download */}
         <button
           className="cd-dl-btn"
           onClick={handleDownload}
@@ -487,10 +499,12 @@ function ResourceCard({ ressource, dark, lang, t, onPreview }) {
             color: "#2563eb",
             borderColor: t.accentBdr,
             opacity: resId ? 1 : 0.4,
-            cursor: resId ? "pointer" : "not-allowed",
+            cursor: resId && !downloading ? "pointer" : "not-allowed",
           }}>
           {Ico.dl}
-          {downloading ? (lang==="fr"?"Ouverture…":"Opening…") : (lang==="fr"?"Télécharger":"Download")}
+          {downloading
+            ? (lang==="fr" ? "Téléchargement…" : "Downloading…")
+            : (lang==="fr" ? "Télécharger"     : "Download")}
         </button>
       </div>
     </div>
@@ -499,9 +513,9 @@ function ResourceCard({ ressource, dark, lang, t, onPreview }) {
 
 function RessourcesSection({ ressources, loading, dark, lang, t, onPreview }) {
   const tx = {
-    title:   lang==="fr" ? "Ressources du cours"  : "Course Resources",
+    title:   lang==="fr" ? "Ressources du cours"        : "Course Resources",
     empty:   lang==="fr" ? "Aucune ressource disponible." : "No resources available.",
-    loading: lang==="fr" ? "Chargement…" : "Loading…",
+    loading: lang==="fr" ? "Chargement…"                : "Loading…",
   };
   return (
     <SectionBlock icon={Ico.file} title={tx.title} dark={dark} t={t} delay={480}>
@@ -540,7 +554,7 @@ function useCourseDetail(id) {
       setLoading(true); setLoadingRes(true); setError(null);
       try {
         const res = await fetch(`${API}/cours/${id}`);
-        if (!res.ok) throw new Error(res.status===404?"Cours non trouvé":`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(res.status===404 ? "Cours non trouvé" : `HTTP ${res.status}`);
         const json = await res.json();
         const data = extractCourse(json);
         if (!data) throw new Error("Réponse invalide");
@@ -554,7 +568,7 @@ function useCourseDetail(id) {
         finally  { if (!cancelled) setLoadingRes(false); }
 
       } catch (err) {
-        if (!cancelled) { setError(err?.message??"Erreur réseau"); setLoading(false); setLoadingRes(false); }
+        if (!cancelled) { setError(err?.message ?? "Erreur réseau"); setLoading(false); setLoadingRes(false); }
       }
     };
     load();
@@ -575,8 +589,6 @@ export default function CourseDetailPage({ dark = false, lang = "fr" }) {
   const { cours, ressources, loading, loadingRes, error, retry } = useCourseDetail(id);
   const onBack = () => navigate(-1);
 
-  // ── Preview modal state ────────────────────────────────────
-  // previewFile: { url: string, filename: string, titre: string } | null
   const [previewFile, setPreviewFile] = useState(null);
   const openPreview  = useCallback((file) => setPreviewFile(file), []);
   const closePreview = useCallback(() => setPreviewFile(null), []);
@@ -585,7 +597,6 @@ export default function CourseDetailPage({ dark = false, lang = "fr" }) {
     <div style={{ minHeight:"100vh", background:t.bg, fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif" }}>
       <style>{CSS}</style>
 
-      {/* Preview modal — rendered at top level to avoid z-index issues */}
       {previewFile && (
         <PreviewModal
           previewUrl={previewFile.url}
@@ -617,8 +628,8 @@ export default function CourseDetailPage({ dark = false, lang = "fr" }) {
           <CourseHeader cours={cours} dark={dark} lang={lang} t={t} onBack={onBack}/>
           <div style={{ maxWidth:1000, margin:"0 auto", padding:"36px 2rem 80px" }}>
             <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
-              <CourseInfo    cours={cours}               dark={dark} lang={lang} t={t}/>
-              <CourseContent cours={cours}               dark={dark} lang={lang} t={t}/>
+              <CourseInfo    cours={cours} dark={dark} lang={lang} t={t}/>
+              <CourseContent cours={cours} dark={dark} lang={lang} t={t}/>
               <RessourcesSection
                 ressources={ressources} loading={loadingRes}
                 dark={dark} lang={lang} t={t}

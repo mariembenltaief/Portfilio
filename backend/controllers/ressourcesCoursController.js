@@ -1,9 +1,4 @@
 // controllers/ressourcesCoursController.js
-// FIXES:
-//  ✅ getResourcesByCourse: works without auth (req.userId may be undefined)
-//  ✅ downloadResource: consistent path resolution (no more path breaks)
-//  ✅ uploadResource: stores relative path 'uploads/resources/filename'
-//  ✅ All responses use consistent { success, resources/resource } shape
 
 const path = require('path');
 const fs   = require('fs');
@@ -51,23 +46,13 @@ const upload = multer({
 }).single('fichier');
 
 // ─── Helper: resolve stored path to absolute ─────────────────
-// Handles both legacy absolute paths and new relative paths.
 function resolveFilePath(stored) {
   if (!stored) return null;
-
-  // إذا absolute path → نستعمله مباشرة
-  if (path.isAbsolute(stored)) {
-    return stored;
-  }
-
-  // FORCE correct backend uploads folder
-  return path.join(__dirname, '..', '..', stored);
-}
-
-// ─── Helper: store consistent relative path ──────────────────
-function makeStoredPath(filename) {
-  // Always store as forward-slash relative path (cross-platform)
-  return `uploads/resources/${filename}`;
+  // Absolute path → use directly
+  if (path.isAbsolute(stored)) return stored;
+  // Relative path like 'uploads/resources/file.pdf'
+  // __dirname = backend/controllers → go up ONE level to backend root
+  return path.join(__dirname, '..', stored);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -78,10 +63,7 @@ const uploadResource = async (req, res) => {
     const file = req.file;
 
     if (!file) {
-      return res.status(400).json({
-        success: false,
-        message: "Aucun fichier",
-      });
+      return res.status(400).json({ success: false, message: "Aucun fichier" });
     }
 
     const cleanPath = `uploads/resources/${file.filename}`;
@@ -93,56 +75,38 @@ const uploadResource = async (req, res) => {
       [req.params.courseId, file.originalname, cleanPath]
     );
 
-    res.json({
-      success: true,
-      resource: newResource.rows[0], // ⚠️ standardize
-    });
+    res.json({ success: true, resource: newResource.rows[0] });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
 // ════════════════════════════════════════════════════════════════
-// GET RESOURCES BY COURSE  — PUBLIC (softProtect applied in route)
+// GET RESOURCES BY COURSE  — PUBLIC
 // ════════════════════════════════════════════════════════════════
 const getResourcesByCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
 
-    // 1. check course exists (WITHOUT visible blocking)
     const course = await CoursModel.findByIdPublic(courseId);
 
     if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: "Cours non trouvé"
-      });
+      return res.status(404).json({ success: false, message: "Cours non trouvé" });
     }
 
-    // 2. if course not visible → no resources
     if (!course.visible) {
       return res.json({ success: true, resources: [] });
     }
 
-    // 3. get resources (PUBLIC ONLY)
     const resources = await RessourcesCoursModel.findByCourse(courseId);
 
-    return res.json({
-      success: true,
-      resources
-    });
+    return res.json({ success: true, resources });
 
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Erreur serveur"
-    });
+    return res.status(500).json({ success: false, message: "Erreur serveur" });
   }
 };
 
@@ -153,30 +117,62 @@ const downloadResource = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const resource = await RessourcesCoursModel.findById(id, req.userId);
+    // Chercher la ressource sans restriction visible (download public)
+    const dbResult = await pool.query(
+      `SELECT r.*, c.visible as cours_visible
+       FROM ressources_cours r
+       JOIN cours c ON r.cours_id = c.id
+       WHERE r.id = $1`,
+      [id]
+    );
+    const resource = dbResult.rows[0];
     if (!resource) {
-      return res.status(404).json({ success: false });
+      return res.status(404).json({ success: false, message: 'Ressource non trouvée' });
     }
 
     const filePath = resolveFilePath(resource.fichier);
 
     if (!filePath || !fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, message: 'File not found' });
+      return res.status(404).json({ success: false, message: 'Fichier introuvable sur le serveur' });
     }
 
     const ext = path.extname(filePath).toLowerCase();
 
-    // 📌 PREVIEW MODE (browser display)
-    if (req.query.preview === 'true' || ext === '.pdf') {
-      res.setHeader('Content-Type', 'application/pdf');
+    // ─── PREVIEW MODE — uniquement si ?preview=true ───────────────
+    if (req.query.preview === 'true') {
+      const mimeTypes = {
+        '.pdf':  'application/pdf',
+        '.jpg':  'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png':  'image/png',
+        '.mp4':  'video/mp4',
+      };
+      const mime = mimeTypes[ext] || 'application/octet-stream';
+      res.setHeader('Content-Type', mime);
+      res.setHeader('Content-Disposition', 'inline');
       return res.sendFile(filePath);
     }
 
-    // 📌 DOWNLOAD MODE
-    return res.download(filePath, resource.titre);
+    // ─── DOWNLOAD MODE — force téléchargement dans TOUS les cas ────
+    // Content-Type: application/octet-stream empêche le navigateur
+    // d'afficher le fichier (PDF, image, etc.)
+    const downloadName = resource.titre.includes('.')
+      ? resource.titre
+      : `${resource.titre}${ext}`;
+
+    // ✅ Incrémenter le compteur de téléchargements
+    await RessourcesCoursModel.incrementDownloads(id);
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`
+    );
+    return res.sendFile(filePath);
 
   } catch (err) {
-    return res.status(500).json({ success: false });
+    console.error('downloadResource error:', err);
+    return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 };
 
@@ -196,24 +192,17 @@ const deleteResource = async (req, res) => {
       });
     }
 
-    // 🔥 now result.fichier exists
     const filePath = resolveFilePath(result.fichier);
 
     if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
 
-    return res.json({
-      success: true,
-      message: 'Ressource supprimée'
-    });
+    return res.json({ success: true, message: 'Ressource supprimée' });
 
   } catch (error) {
     console.error('deleteResource error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Erreur serveur'
-    });
+    return res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 };
 
@@ -230,7 +219,10 @@ const updateResourceVisibility = async (req, res) => {
     );
 
     if (!resource) {
-      return res.status(404).json({ success: false, message: 'Ressource non trouvée ou non autorisée' });
+      return res.status(404).json({
+        success: false,
+        message: 'Ressource non trouvée ou non autorisée'
+      });
     }
 
     return res.json({ success: true, resource });
