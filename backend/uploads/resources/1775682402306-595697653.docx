@@ -1,0 +1,129 @@
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";‎
+
+CREATE TABLE utilisateur (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    nom VARCHAR(100) NOT NULL,‎
+‎    prenom VARCHAR(100) NOT NULL,‎
+‎    email VARCHAR(150) UNIQUE NOT NULL,‎
+‎    mot_de_passe TEXT NOT NULL,‎
+‎    role VARCHAR(50) DEFAULT 'admin' CHECK (role = 'admin'),‎
+‎    etablissement VARCHAR(150),‎
+‎    specialite VARCHAR(150),‎
+‎    grade VARCHAR(100),‎
+‎    bio TEXT,‎
+‎    photo TEXT,‎
+‎    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎   ‎);‎
+
+CREATE TABLE cours (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    id_utilisateur UUID NOT NULL,‎
+‎    type VARCHAR(10) CHECK (type IN ('CM', 'TD', 'TP')),‎
+‎    institution VARCHAR(150),‎
+‎    annee VARCHAR(20) NOT NULL,‎
+‎    intitule VARCHAR(200) NOT NULL,‎
+‎    niveau VARCHAR(100),‎
+‎    description TEXT,‎
+‎    volume_horaire INT CHECK (volume_horaire >= 0),‎
+‎    intervenants TEXT,‎
+‎    evaluation TEXT,‎
+‎    visible BOOLEAN DEFAULT TRUE,‎
+‎    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    FOREIGN KEY (id_utilisateur) REFERENCES utilisateur(id) ON DELETE CASCADE
+‎);‎
+
+CREATE TABLE ressource_pedagogique (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    id_cours UUID NOT NULL,‎
+‎    titre VARCHAR(200) NOT NULL,‎
+‎    fichier TEXT NOT NULL,‎
+‎    nb_telechargements INT DEFAULT 0 CHECK (nb_telechargements >= 0),‎
+‎    afficher_compteur BOOLEAN DEFAULT TRUE,‎
+‎    visible BOOLEAN DEFAULT TRUE,‎
+‎    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    FOREIGN KEY (id_cours) REFERENCES cours(id) ON DELETE CASCADE
+‎);‎
+
+CREATE TABLE projet_recherche (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    id_utilisateur UUID NOT NULL,‎
+‎    titre VARCHAR(200) NOT NULL,‎
+‎    description TEXT,‎
+‎    axe_recherche VARCHAR(200),‎
+‎    date_debut DATE,‎
+‎    date_fin DATE CHECK (date_fin >= date_debut),‎
+‎    visible BOOLEAN DEFAULT TRUE,‎
+‎    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    FOREIGN KEY (id_utilisateur) REFERENCES utilisateur(id) ON DELETE CASCADE
+‎);‎
+
+CREATE TABLE blog_academique (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    id_utilisateur UUID NOT NULL,‎
+‎    titre VARCHAR(200) NOT NULL,‎
+‎    contenu TEXT NOT NULL,‎
+‎    categorie VARCHAR(100),‎
+‎    langue VARCHAR(5) CHECK (langue IN ('fr', 'en')),‎
+‎    date_publication TIMESTAMP,‎
+‎    visible BOOLEAN DEFAULT TRUE,‎
+‎    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,‎
+‎    FOREIGN KEY (id_utilisateur) REFERENCES utilisateur(id) ON DELETE CASCADE
+‎);‎
+
+CREATE TABLE lien_externe (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    id_utilisateur UUID NOT NULL,‎
+‎    type VARCHAR(50) CHECK (type IN ('github', 'linkedin', 'orcid', 'scholar')),‎
+‎    url TEXT NOT NULL,‎
+‎    FOREIGN KEY (id_utilisateur) REFERENCES utilisateur(id) ON DELETE CASCADE
+‎);‎
+
+CREATE TABLE parametres (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    id_utilisateur UUID UNIQUE NOT NULL,‎
+‎    langue_principale VARCHAR(5) DEFAULT 'en' CHECK (langue_principale IN ('fr', 'en')),‎
+‎    langue_secondaire VARCHAR(5) CHECK (langue_secondaire IN ('fr', 'en')),‎
+‎    theme VARCHAR(10) DEFAULT 'light' CHECK (theme IN ('light', 'dark')),‎
+‎    FOREIGN KEY (id_utilisateur) REFERENCES utilisateur(id) ON DELETE CASCADE
+‎);‎
+
+CREATE TABLE statistique (‎
+‎    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),‎
+‎    id_utilisateur UUID UNIQUE NOT NULL,‎
+‎    nb_cours INT DEFAULT 0,‎
+‎    nb_cm INT DEFAULT 0,‎
+‎    nb_td INT DEFAULT 0,‎
+‎    nb_tp INT DEFAULT 0,‎
+‎    nb_ressources INT DEFAULT 0,‎
+‎    nb_telechargements INT DEFAULT 0,‎
+‎    nb_projets_recherche INT DEFAULT 0,‎
+‎    nb_articles_blog INT DEFAULT 0,‎
+‎    FOREIGN KEY (id_utilisateur) REFERENCES utilisateur(id) ON DELETE CASCADE
+‎);‎
+
+CREATE INDEX idx_cours_user ON cours(id_utilisateur);‎
+CREATE INDEX idx_projet_user ON projet_recherche(id_utilisateur);‎
+CREATE INDEX idx_blog_user ON blog_academique(id_utilisateur);‎
+CREATE INDEX idx_ressource_cours ON ressource_pedagogique(id_cours);‎
+
+CREATE OR REPLACE FUNCTION update_timestamp()‎
+RETURNS TRIGGER AS $$‎
+BEGIN
+‎    NEW.updated_at = CURRENT_TIMESTAMP;‎
+‎    RETURN NEW;‎
+END;‎
+‎$$ LANGUAGE plpgsql;‎
+
+CREATE TRIGGER trg_user BEFORE UPDATE ON utilisateur
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();‎
+
+CREATE TRIGGER trg_cours BEFORE UPDATE ON cours
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();‎
+
+CREATE TRIGGER trg_blog BEFORE UPDATE ON blog_academique
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();‎
