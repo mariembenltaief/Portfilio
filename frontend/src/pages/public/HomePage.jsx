@@ -12,7 +12,6 @@ import { StatsBar }            from "../../components/sections/StatsBar";
 import { CoursSection }        from "../../components/sections/CoursSection";
 import { ProjetsSection }      from "../../components/sections/ProjetsSection";
 import { PublicationsSection } from "../../components/sections/PublicationsSection";
-import { RessourcesSection }   from "../../components/sections/RessourcesSection";
 import { AProposSection }      from "../../components/sections/AProposSection";
 import { BlogSection }         from "../../components/sections/BlogSection";
 import { ContactSection }      from "../../components/sections/ContactSection";
@@ -67,11 +66,8 @@ export default function HomePage({ dark, lang }) {
 
       <ProjetsSection      projets={projets}          dark={dark} lang={lang} />
       <PublicationsSection publications={publications} dark={dark} lang={lang} />
-
-      <RessourcesSection cours={cours} dark={dark} lang={lang} />
-
-      <AProposSection visiteur={visiteur} dark={dark} lang={lang} />
       <BlogSection    articlesBlog={articlesBlog}     dark={dark} lang={lang} />
+      <AProposSection visiteur={visiteur} dark={dark} lang={lang} />
 
       <ContactSection
         visiteur={visiteur}

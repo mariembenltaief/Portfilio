@@ -12,6 +12,10 @@ import ProjetDetailPage from "./pages/public/ProjetDetailPage.jsx";
 import PublicationDetailPage from "./pages/public/PublicationDetailPage.jsx";
 import BlogDetailPage from "./pages/public/BlogDetailPage.jsx";
 import ProjetsPage from "./pages/public/ProjetsPage.jsx";
+import PublicationsPage from "./pages/public/PublicationsPage.jsx";
+import BlogPage from "./pages/public/BlogPage.jsx";
+import ScrollToTop from "./components/utils/ScrollToTop";
+
 
 
 export default function App() {
@@ -25,6 +29,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
+    <ScrollToTop />
+
       <div style={{ background: theme.bg, color: theme.text, minHeight: "100vh" }}>
 
         {/* ✅ visiteur passé au Navbar depuis App.jsx */}
@@ -44,10 +50,9 @@ export default function App() {
           <Route path="/projets/:id" element={<ProjetDetailPage dark={dark} lang={lang} />} />
     <Route path="/publications/:id" element={<PublicationDetailPage dark={dark} lang={lang} />} />
     <Route path="/blog/:id" element={<BlogDetailPage dark={dark} lang={lang}/>}/>
-    import ProjetsPage from "./pages/public/ProjetsPage";
-
-// dans les routes :
-<Route path="/projets" element={<ProjetsPage dark={dark} lang={lang} />} />
+    <Route path="/publications" element={<PublicationsPage dark={dark} lang={lang} />} />
+    <Route path="/projets" element={<ProjetsPage dark={dark} lang={lang} />} />
+    <Route path="/blog" element={<BlogPage dark={dark} lang={lang} />} />
         </Routes>
 
         <Footer
