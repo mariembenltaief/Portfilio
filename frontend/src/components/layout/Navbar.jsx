@@ -4,8 +4,10 @@ import { NAV_IDS, NAV_LABELS } from "../../constants/nav";
 import { useScrolled } from "../../hooks/useScrolled";
 import { getInitials } from "../../utils/formatters";
 import { Icons } from "../ui/Icons";
+import { useTranslation } from "../../i18n";
 
-export default function Navbar({ dark, setDark, lang, setLang, visiteur, theme = {} }) {
+export default function Navbar({ dark, setDark, visiteur, theme = {} }) {
+  const { lang, setLang } = useTranslation(); // ✅ ناخذ lang من i18n
   const ACCENT = theme?.accent ?? "#2563eb";
 
   const scrolled = useScrolled();
@@ -188,7 +190,7 @@ export default function Navbar({ dark, setDark, lang, setLang, visiteur, theme =
         {/* CONTROLS */}
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
 
-          <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} style={{
+          <button onClick={() => setLang(lang === "fr" ? "en" : "fr")} style={{
             background: "transparent",
             border: "1px solid rgba(0,0,0,.1)",
             borderRadius: 6,

@@ -5,62 +5,23 @@
 import { ENDPOINTS, AUTH_ENDPOINTS } from "../constants/api";
 
 // ═══════════════════════════════════════════════════════════════
-// CORE FETCHER
+// INTERNAL UTILITIES  — defined FIRST so every function below
+// can reference them without hitting the temporal dead zone.
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Known API envelope keys.
- * The backend sometimes wraps the payload in { courses: [...] }
- * or { data: [...] }. We unwrap automatically.
+ * Coerce any value to a safe, non-null array.
+ * null / undefined / non-array  →  []
  */
-const ENVELOPE_KEYS = [
-  "data",
-  "enseignant", "visiteur",
-  "cours", "course", "courses",
-  "publications",
-  "projets", "projects",
-  "posts", "articles", "blogPosts",
-  "liens", "links",
-  "skills",
-  "parcours",
-];
+const toArray = (v) => (Array.isArray(v) ? v : []);
+
+// ═══════════════════════════════════════════════════════════════
+// CORE FETCHERS
+// ═══════════════════════════════════════════════════════════════
 
 /**
- * Generic GET fetcher.
- * - Unwraps known envelope keys
- * - Returns null on network error or non-OK status (never throws)
- *
- * @param {string} url
- * @returns {Promise<any | null>}
- */
-const fetcher = async (url) => {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-
-    const json = await res.json();
-    if (!json || typeof json !== "object") return json;
-
-    // Unwrap single-key envelopes like { courses: [...] }
-    for (const key of ENVELOPE_KEYS) {
-      if (key in json) return json[key];
-    }
-
-    return json;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Generic authenticated POST / PUT / DELETE fetcher.
- * Returns parsed JSON or null on failure.
- *
- * @param {string} url
- * @param {"POST"|"PUT"|"PATCH"|"DELETE"} method
- * @param {object|null} body
- * @param {string} token  JWT Bearer token
- * @returns {Promise<any | null>}
+ * Generic authenticated POST / PUT / PATCH / DELETE fetcher.
+ * Returns parsed JSON or null on failure — never throws.
  */
 const authFetcher = async (url, method, body, token) => {
   try {
@@ -79,25 +40,106 @@ const authFetcher = async (url, method, body, token) => {
   }
 };
 
+/**
+ * Generic public GET — returns parsed JSON or null, never throws.
+ * Does NOT attempt envelope-unwrapping; each public fetcher below
+ * does its own explicit unwrap so there is no key-order ambiguity.
+ */
+const get = async (url) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+};
+
 // ═══════════════════════════════════════════════════════════════
-// PUBLIC ENDPOINTS
+// PUBLIC ENDPOINT FETCHERS
+// Each one knows exactly which envelope key its API returns.
 // ═══════════════════════════════════════════════════════════════
 
-export const fetchVisiteur     = () => fetcher(ENDPOINTS.visiteur);
-export const fetchCours        = () => fetcher(ENDPOINTS.cours);
-export const fetchPublications = () => fetcher(ENDPOINTS.publications);
-export const fetchProjets      = () => fetcher(ENDPOINTS.projets);
-export const fetchLiens        = () => fetcher(ENDPOINTS.liens);
-export const fetchBlog         = () => fetcher(ENDPOINTS.blog);
-export const fetchSkills       = () => fetcher(ENDPOINTS.skills);
-export const fetchParcours     = () => fetcher(ENDPOINTS.parcours);
+export const fetchVisiteur = async () => {
+  const json = await get(ENDPOINTS.visiteur);
+  if (!json) return null;
+  // Accept { visiteur: {} } | { enseignant: {} } | the object itself
+  if (json.visiteur   && typeof json.visiteur   === "object") return json.visiteur;
+  if (json.enseignant && typeof json.enseignant === "object") return json.enseignant;
+  if (json.data       && typeof json.data       === "object") return json.data;
+  // If the response looks like the profile object directly, return it
+  if (json.nom || json.prenom || json.email) return json;
+  return null;
+};
+
+export const fetchCours = async () => {
+  const json = await get(ENDPOINTS.cours);
+  if (Array.isArray(json))           return json;
+  if (Array.isArray(json?.courses))  return json.courses;
+  if (Array.isArray(json?.cours))    return json.cours;
+  if (Array.isArray(json?.data))     return json.data;
+  return [];
+};
+
+export const fetchPublications = async () => {
+  const json = await get(ENDPOINTS.publications);
+  if (Array.isArray(json))                return json;
+  if (Array.isArray(json?.publications))  return json.publications;
+  if (Array.isArray(json?.data))          return json.data;
+  return [];
+};
+
+export const fetchProjets = async () => {
+  const json = await get(ENDPOINTS.projets);
+  if (Array.isArray(json))           return json;
+  if (Array.isArray(json?.projets))  return json.projets;
+  if (Array.isArray(json?.projects)) return json.projects;
+  if (Array.isArray(json?.data))     return json.data;
+  return [];
+};
+
+export const fetchLiens = async () => {
+  const json = await get(ENDPOINTS.liens);
+  if (Array.isArray(json))        return json;
+  if (Array.isArray(json?.liens)) return json.liens;
+  if (Array.isArray(json?.links)) return json.links;
+  if (Array.isArray(json?.data))  return json.data;
+  return [];
+};
+
+export const fetchBlog = async () => {
+  const json = await get(ENDPOINTS.blog);
+  if (Array.isArray(json))              return json;
+  if (Array.isArray(json?.blogPosts))   return json.blogPosts;
+  if (Array.isArray(json?.articles))    return json.articles;
+  if (Array.isArray(json?.posts))       return json.posts;
+  if (Array.isArray(json?.data))        return json.data;
+  return [];
+};
+
+/** GET /api/apropos/skills → { success, skills: [...] } */
+export const fetchSkills = async () => {
+  const json = await get(ENDPOINTS.skills);
+  if (Array.isArray(json))          return json;
+  if (Array.isArray(json?.skills))  return json.skills;
+  if (Array.isArray(json?.data))    return json.data;
+  return [];
+};
+
+/** GET /api/apropos/parcours → { success, parcours: [...] } */
+export const fetchParcours = async () => {
+  const json = await get(ENDPOINTS.parcours);
+  if (Array.isArray(json))            return json;
+  if (Array.isArray(json?.parcours))  return json.parcours;
+  if (Array.isArray(json?.data))      return json.data;
+  return [];
+};
 
 // ─── Batch loader ─────────────────────────────────────────────
 
 /**
  * Fetch ALL public portfolio data in one parallel batch.
- * Every field is guaranteed to be a safe value (array or object),
- * never null — components can destructure without null-checks.
+ * Every field is guaranteed to be a safe value — never null.
  *
  * @returns {Promise<{
  *   visiteur:     object | null,
@@ -132,12 +174,12 @@ export const fetchAllPortfolioData = async () => {
   ]);
 
   return {
-    visiteur:     visiteur   ?? null,
+    visiteur:     visiteur ?? null,
     cours:        toArray(cours),
     publications: toArray(publications),
     projets:      toArray(projets),
     liens:        toArray(liens),
-    articlesBlog: toArray(blog?.blogPosts ?? blog),
+    articlesBlog: toArray(blog),
     skills:       toArray(skills),
     parcours:     toArray(parcours),
   };
@@ -167,7 +209,7 @@ export const sendContactMessage = async (payload) => {
 // AUTHENTICATED ENDPOINTS  (dashboard / admin)
 // ═══════════════════════════════════════════════════════════════
 
-// ── Skills CRUD ──────────────────────────────────────────────
+// ── Skills CRUD ───────────────────────────────────────────────
 
 export const fetchMySkills = (token) =>
   authFetcher(AUTH_ENDPOINTS.mySkills, "GET", null, token);
@@ -184,7 +226,7 @@ export const deleteSkill = (token, id) =>
 export const reorderSkills = (token, ids) =>
   authFetcher(AUTH_ENDPOINTS.reorderSkills, "PATCH", { ids }, token);
 
-// ── Parcours CRUD ────────────────────────────────────────────
+// ── Parcours CRUD ─────────────────────────────────────────────
 
 export const fetchMyParcours = (token) =>
   authFetcher(AUTH_ENDPOINTS.myParcours, "GET", null, token);
@@ -200,15 +242,3 @@ export const deleteParcours = (token, id) =>
 
 export const reorderParcours = (token, ids) =>
   authFetcher(AUTH_ENDPOINTS.reorderParcours, "PATCH", { ids }, token);
-
-// ═══════════════════════════════════════════════════════════════
-// INTERNAL UTILITIES
-// ═══════════════════════════════════════════════════════════════
-
-/**
- * Coerce any value to a safe array.
- * null / undefined / non-array  →  []
- * @param {any} v
- * @returns {any[]}
- */
-const toArray = (v) => (Array.isArray(v) ? v : []);

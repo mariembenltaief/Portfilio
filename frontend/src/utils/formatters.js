@@ -36,6 +36,7 @@ export const field = {
   desc:    (o) => o?.description || o?.resume || null,
   axe:     (o) => o?.axe_recherche || o?.axe  || o?.domaine || null,
   statut:  (o) => o?.statut || o?.status      || null,
+  motsCles: (o) => o?.motsCles || o?.mots_cles || o?.keywords || o?.tags || null,
 };
 
 /** Derive initials from a visiteur object */

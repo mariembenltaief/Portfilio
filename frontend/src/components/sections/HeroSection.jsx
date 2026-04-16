@@ -5,7 +5,7 @@ import { Icons }     from "../ui/Icons";
 import { scrollToSection, getInitials } from "../../utils/formatters";
 import CVModal       from "../cv/CVModal";
 
-export function HeroSection({ visiteur, dark, lang, socialLinks, cours, publications, projets }) {
+export function HeroSection({ visiteur, dark, lang, socialLinks, cours, publications, projets,skills }) {
   const t = getTheme(dark);
 
   const nom      = visiteur?.prenom || visiteur?.nom || "Enseignant";
@@ -126,15 +126,16 @@ export function HeroSection({ visiteur, dark, lang, socialLinks, cours, publicat
 
       {/* ── CV Modal ── */}
       {showCV && (
-        <CVModal
-          visiteur={visiteur}
-          cours={cours}
-          publications={publications}
-          projets={projets}
-          dark={dark}
-          lang={lang}
-          onClose={() => setShowCV(false)}
-        />
+         <CVModal
+        visiteur={visiteur}
+        cours={cours}
+        publications={publications}
+        projets={projets}
+        skills={skills}   
+        dark={dark}
+        lang={lang}
+        onClose={() => setShowCV(false)}
+      />
       )}
     </section>
   );
